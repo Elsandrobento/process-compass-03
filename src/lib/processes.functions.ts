@@ -108,10 +108,11 @@ export const submitDecision = createServerFn({ method: "POST" })
       throw new Error("Apenas o responsável atual pode tomar decisões");
     }
 
-    let newStatus = proc.status;
+    let newStatus: "pendente" | "em_analise" | "aprovado" | "rejeitado" | "devolvido" | "concluido" = proc.status;
     let newStep = proc.current_step as StepKind;
     let newCurrent: string | null = proc.current_user_id;
     let action: "favoravel" | "nao_favoravel" | "devolvido" | "arquivado" = "favoravel";
+
 
     if (data.action === "favoravel") {
       action = "favoravel";
