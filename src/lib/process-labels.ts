@@ -5,6 +5,7 @@ export const STATUS_LABEL: Record<string, string> = {
   rejeitado: "Rejeitado",
   devolvido: "Devolvido",
   concluido: "Concluído",
+  em_pagamento: "Em pagamento",
 };
 
 export const TYPE_LABEL: Record<string, string> = {
@@ -22,9 +23,14 @@ export const PRIORITY_LABEL: Record<string, string> = {
 
 export const STEP_LABEL: Record<string, string> = {
   criador: "Criador",
+  quarto: "4º Parecer (Departamento envolvido)",
+  adjunta: "Adjunta do Director Geral",
+  diretor_geral: "Director Geral",
+  presidente: "Presidente do Conselho",
+  pagamento: "Pagamento",
+  // legacy
   chefe: "Chefe de Departamento",
   diretor: "Diretor",
-  diretor_geral: "Diretor Geral",
   arquivo: "Arquivo",
 };
 
@@ -33,8 +39,11 @@ export const ACTION_LABEL: Record<string, string> = {
   encaminhado: "Encaminhado",
   favoravel: "Parecer favorável",
   nao_favoravel: "Parecer não favorável",
-  devolvido: "Devolvido",
+  devolvido: "Devolvido para correcção",
+  reenviado: "Reenviado pelo criador",
   arquivado: "Arquivado",
+  concluido: "Concluído — enviado para pagamento",
+  rejeitado: "Processo rejeitado pelo Presidente",
 };
 
 export const ROLE_LABEL: Record<string, string> = {
@@ -42,14 +51,15 @@ export const ROLE_LABEL: Record<string, string> = {
   criador: "Criador",
   validador: "Validador",
   diretor: "Diretor",
-  diretor_geral: "Diretor Geral",
+  adjunta: "Adjunta",
+  diretor_geral: "Director Geral",
   presidente: "Presidente",
   leitura: "Leitura",
 };
 
 export function statusVariant(s: string): "default" | "secondary" | "destructive" | "outline" {
   if (s === "rejeitado") return "destructive";
-  if (s === "concluido" || s === "aprovado") return "default";
+  if (s === "concluido" || s === "aprovado" || s === "em_pagamento") return "default";
   if (s === "devolvido") return "outline";
   return "secondary";
 }
@@ -61,6 +71,7 @@ export function statusColor(s: string): string {
       return "bg-warning/15 text-warning-foreground border-warning/40";
     case "aprovado":
     case "concluido":
+    case "em_pagamento":
       return "bg-success/15 text-success border-success/40";
     case "rejeitado":
       return "bg-destructive/15 text-destructive border-destructive/40";

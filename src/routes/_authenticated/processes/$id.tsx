@@ -38,13 +38,13 @@ function ProcessDetail() {
   }, []);
 
   const decide = useMutation({
-    mutationFn: (action: "favoravel" | "nao_favoravel" | "devolver") =>
+    mutationFn: (action: "favoravel" | "nao_favoravel" | "devolver" | "reenviar") =>
       decideFn({
         data: {
           process_id: id,
           action,
           comment: comment || undefined,
-          next_user_id: action === "favoravel" ? nextUser || undefined : undefined,
+          next_user_id: action === "favoravel" || action === "reenviar" ? nextUser || undefined : undefined,
         },
       }),
     onSuccess: () => {
@@ -63,8 +63,12 @@ function ProcessDetail() {
 
   const { process, steps, attachments, profiles, signedUrls } = q.data;
   const isResponsible = currentUserId === process.current_user_id;
-  const isClosed = process.status === "concluido" || process.status === "rejeitado";
-  const isLastStep = process.current_step === "diretor_geral";
+  const isClosed =
+    process.status === "concluido" || process.status === "rejeitado" || process.status === "em_pagamento";
+  const isPresident = process.current_step === "presidente";
+  const isCreatorResubmit = process.status === "devolvido" && process.current_step === "criador";
+  const requiresNextUser = !isPresident && !isCreatorResubmit;
+
 
   return (
     <div className="max-w-7xl space-y-6">
@@ -109,18 +113,27 @@ function ProcessDetail() {
           </Section>
 
           {isResponsible && !isClosed && (
-            <Section title="Tomar decisão">
+            <Section title={isCreatorResubmit ? "Reenviar processo" : "Tomar decisão"}>
               <div className="space-y-3">
+                {isCreatorResubmit && (
+                  <div className="text-sm bg-info/10 border border-info/30 text-info rounded px-3 py-2">
+                    Este processo foi devolvido para correcção. Faça as alterações necessárias e reenvie para continuar o fluxo.
+                  </div>
+                )}
                 <Textarea
-                  placeholder="Comentário (obrigatório para rejeição ou devolução)"
+                  placeholder={
+                    isCreatorResubmit
+                      ? "Comentário sobre as correcções (opcional)"
+                      : "Comentário (obrigatório para parecer não favorável ou devolução)"
+                  }
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
                   rows={3}
                 />
-                {!isLastStep && (
+                {requiresNextUser && (
                   <div>
                     <div className="text-xs text-muted-foreground mb-1">
-                      Próximo responsável (apenas para parecer favorável):
+                      Próximo responsável:
                     </div>
                     <Select value={nextUser} onValueChange={setNextUser}>
                       <SelectTrigger><SelectValue placeholder="Selecionar próximo responsável" /></SelectTrigger>
@@ -135,32 +148,50 @@ function ProcessDetail() {
                   </div>
                 )}
                 <div className="flex flex-wrap gap-2">
-                  <Button
-                    onClick={() => decide.mutate("favoravel")}
-                    disabled={decide.isPending || (!isLastStep && !nextUser)}
-                    className="bg-success text-success-foreground hover:bg-success/90"
-                  >
-                    <CheckCircle2 className="h-4 w-4 mr-2" />
-                    {isLastStep ? "Favorável e arquivar" : "Favorável"}
-                  </Button>
-                  <Button
-                    onClick={() => decide.mutate("nao_favoravel")}
-                    disabled={decide.isPending || comment.trim().length < 3}
-                    variant="destructive"
-                  >
-                    <XCircle className="h-4 w-4 mr-2" /> Não favorável
-                  </Button>
-                  <Button
-                    onClick={() => decide.mutate("devolver")}
-                    disabled={decide.isPending || comment.trim().length < 3}
-                    variant="outline"
-                  >
-                    <Undo2 className="h-4 w-4 mr-2" /> Devolver
-                  </Button>
+                  {isCreatorResubmit ? (
+                    <Button
+                      onClick={() => decide.mutate("reenviar")}
+                      disabled={decide.isPending || !nextUser}
+                      className="bg-primary text-primary-foreground hover:bg-primary/90"
+                    >
+                      <ArrowRight className="h-4 w-4 mr-2" /> Reenviar para Adjunta
+                    </Button>
+                  ) : (
+                    <>
+                      <Button
+                        onClick={() => decide.mutate("favoravel")}
+                        disabled={decide.isPending || (requiresNextUser && !nextUser)}
+                        className="bg-success text-success-foreground hover:bg-success/90"
+                      >
+                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                        {isPresident ? "Aprovar e enviar para pagamento" : "Favorável"}
+                      </Button>
+                      <Button
+                        onClick={() => decide.mutate("nao_favoravel")}
+                        disabled={
+                          decide.isPending ||
+                          comment.trim().length < 3 ||
+                          (requiresNextUser && !nextUser)
+                        }
+                        variant="destructive"
+                      >
+                        <XCircle className="h-4 w-4 mr-2" />
+                        {isPresident ? "Rejeitar processo" : "Não favorável (continua)"}
+                      </Button>
+                      <Button
+                        onClick={() => decide.mutate("devolver")}
+                        disabled={decide.isPending || comment.trim().length < 3}
+                        variant="outline"
+                      >
+                        <Undo2 className="h-4 w-4 mr-2" /> Devolver ao criador
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             </Section>
           )}
+
         </div>
 
         <div className="space-y-6">
