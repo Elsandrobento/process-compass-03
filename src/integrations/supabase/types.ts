@@ -259,6 +259,9 @@ export type Database = {
         | "nao_favoravel"
         | "devolvido"
         | "arquivado"
+        | "reenviado"
+        | "concluido"
+        | "rejeitado"
       process_priority: "baixa" | "media" | "alta"
       process_status:
         | "pendente"
@@ -423,6 +426,9 @@ export const Constants = {
         "nao_favoravel",
         "devolvido",
         "arquivado",
+        "reenviado",
+        "concluido",
+        "rejeitado",
       ],
       process_priority: ["baixa", "media", "alta"],
       process_status: [
