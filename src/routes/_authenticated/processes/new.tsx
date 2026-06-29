@@ -32,11 +32,14 @@ function NewProcessPage() {
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<"baixa" | "media" | "alta">("media");
   const [recipient, setRecipient] = useState("");
+  const [hasQuarto, setHasQuarto] = useState(false);
+  const [quartoUser, setQuartoUser] = useState("");
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [uploading, setUploading] = useState(false);
 
   const create = useMutation({
     mutationFn: async () => {
+      const initialRecipient = hasQuarto && quartoUser ? quartoUser : recipient;
       return createFn({
         data: {
           title,
@@ -44,7 +47,8 @@ function NewProcessPage() {
           department,
           description,
           priority,
-          recipient_id: recipient,
+          recipient_id: initialRecipient,
+          quarto_user_id: hasQuarto && quartoUser ? quartoUser : undefined,
           attachments: files,
         },
       });
@@ -55,6 +59,7 @@ function NewProcessPage() {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
 
   async function handleFiles(list: FileList | null) {
     if (!list) return;
