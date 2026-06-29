@@ -139,6 +139,7 @@ export type Database = {
           id: string
           numero: string
           priority: Database["public"]["Enums"]["process_priority"]
+          quarto_user_id: string | null
           status: Database["public"]["Enums"]["process_status"]
           title: string
           type: Database["public"]["Enums"]["process_type"]
@@ -154,6 +155,7 @@ export type Database = {
           id?: string
           numero?: string
           priority?: Database["public"]["Enums"]["process_priority"]
+          quarto_user_id?: string | null
           status?: Database["public"]["Enums"]["process_status"]
           title: string
           type: Database["public"]["Enums"]["process_type"]
@@ -169,6 +171,7 @@ export type Database = {
           id?: string
           numero?: string
           priority?: Database["public"]["Enums"]["process_priority"]
+          quarto_user_id?: string | null
           status?: Database["public"]["Enums"]["process_status"]
           title?: string
           type?: Database["public"]["Enums"]["process_type"]
@@ -248,6 +251,7 @@ export type Database = {
         | "diretor_geral"
         | "presidente"
         | "leitura"
+        | "adjunta"
       process_action:
         | "criado"
         | "encaminhado"
@@ -263,12 +267,17 @@ export type Database = {
         | "rejeitado"
         | "devolvido"
         | "concluido"
+        | "em_pagamento"
       process_step_kind:
         | "criador"
         | "chefe"
         | "diretor"
         | "diretor_geral"
         | "arquivo"
+        | "quarto"
+        | "adjunta"
+        | "presidente"
+        | "pagamento"
       process_type: "pagamento" | "patrimonio" | "rh" | "outros"
     }
     CompositeTypes: {
@@ -405,6 +414,7 @@ export const Constants = {
         "diretor_geral",
         "presidente",
         "leitura",
+        "adjunta",
       ],
       process_action: [
         "criado",
@@ -422,6 +432,7 @@ export const Constants = {
         "rejeitado",
         "devolvido",
         "concluido",
+        "em_pagamento",
       ],
       process_step_kind: [
         "criador",
@@ -429,6 +440,10 @@ export const Constants = {
         "diretor",
         "diretor_geral",
         "arquivo",
+        "quarto",
+        "adjunta",
+        "presidente",
+        "pagamento",
       ],
       process_type: ["pagamento", "patrimonio", "rh", "outros"],
     },
