@@ -251,7 +251,7 @@ export const listMyInbox = createServerFn({ method: "GET" })
       .from("processes")
       .select("*")
       .eq("current_user_id", userId)
-      .not("status", "in", "(concluido,rejeitado)")
+      .not("status", "in", "(concluido,rejeitado,em_pagamento)")
       .order("updated_at", { ascending: false });
     if (error) throw new Error(error.message);
     return data;
@@ -277,7 +277,7 @@ export const listArchive = createServerFn({ method: "GET" })
     const { data, error } = await supabase
       .from("processes")
       .select("*")
-      .in("status", ["concluido", "rejeitado"])
+      .in("status", ["concluido", "rejeitado", "em_pagamento"])
       .order("updated_at", { ascending: false })
       .limit(200);
     if (error) throw new Error(error.message);
@@ -289,7 +289,7 @@ export const dashboardCounts = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
     const [pending, created, done, returned] = await Promise.all([
-      supabase.from("processes").select("id", { count: "exact", head: true }).eq("current_user_id", userId).not("status", "in", "(concluido,rejeitado)"),
+      supabase.from("processes").select("id", { count: "exact", head: true }).eq("current_user_id", userId).not("status", "in", "(concluido,rejeitado,em_pagamento)"),
       supabase.from("processes").select("id", { count: "exact", head: true }).eq("created_by", userId),
       supabase.from("processes").select("id", { count: "exact", head: true }).eq("created_by", userId).eq("status", "concluido"),
       supabase.from("processes").select("id", { count: "exact", head: true }).eq("created_by", userId).eq("status", "devolvido"),
