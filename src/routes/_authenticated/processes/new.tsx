@@ -126,10 +126,42 @@ function NewProcessPage() {
           <Label>Descrição</Label>
           <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} />
         </div>
+        <div className="rounded-md border bg-muted/30 p-3 space-y-3">
+          <label className="flex items-start gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={hasQuarto}
+              onChange={(e) => setHasQuarto(e.target.checked)}
+            />
+            <span>
+              <span className="font-medium">Incluir 4º parecer (departamento envolvido)</span>
+              <span className="block text-xs text-muted-foreground mt-0.5">
+                Se marcado, o processo é encaminhado primeiro para este utilizador, antes da Adjunta.
+              </span>
+            </span>
+          </label>
+          {hasQuarto && (
+            <div>
+              <Label>Responsável pelo 4º parecer</Label>
+              <Select value={quartoUser} onValueChange={setQuartoUser}>
+                <SelectTrigger><SelectValue placeholder="Selecionar utilizador do departamento envolvido" /></SelectTrigger>
+                <SelectContent>
+                  {(usersQ.data ?? []).map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.nome} {u.departamento ? `· ${u.departamento}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+
         <div>
-          <Label>Destinatário inicial</Label>
+          <Label>{hasQuarto ? "Adjunta do Director Geral (próximo após o 4º parecer)" : "Adjunta do Director Geral (destinatário inicial)"}</Label>
           <Select value={recipient} onValueChange={setRecipient}>
-            <SelectTrigger><SelectValue placeholder="Selecionar utilizador" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="Selecionar a Adjunta" /></SelectTrigger>
             <SelectContent>
               {(usersQ.data ?? []).map((u) => (
                 <SelectItem key={u.id} value={u.id}>
@@ -138,7 +170,11 @@ function NewProcessPage() {
               ))}
             </SelectContent>
           </Select>
+          <p className="text-xs text-muted-foreground mt-1">
+            Fluxo: Criador → {hasQuarto ? "4º Parecer → " : ""}Adjunta → Director Geral → Presidente → Pagamento.
+          </p>
         </div>
+
 
         <div>
           <Label>Anexos</Label>
