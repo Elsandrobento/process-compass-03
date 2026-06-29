@@ -2,13 +2,45 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-const FLOW_ORDER = ["chefe", "diretor", "diretor_geral", "arquivo"] as const;
-type StepKind = (typeof FLOW_ORDER)[number] | "criador";
+// New flow: criador → (quarto opcional) → adjunta → diretor_geral → presidente → pagamento
+const FLOW_ORDER = ["criador", "quarto", "adjunta", "diretor_geral", "presidente", "pagamento"] as const;
+type StepKind =
+  | "criador"
+  | "quarto"
+  | "adjunta"
+  | "diretor_geral"
+  | "presidente"
+  | "pagamento"
+  // legacy values still present in DB
+  | "chefe"
+  | "diretor"
+  | "arquivo";
 
-function nextStep(current: StepKind): StepKind {
-  const idx = FLOW_ORDER.indexOf(current as Exclude<StepKind, "criador">);
-  if (idx === -1) return "chefe";
-  return FLOW_ORDER[idx + 1] ?? "arquivo";
+type ProcStatus =
+  | "pendente"
+  | "em_analise"
+  | "aprovado"
+  | "rejeitado"
+  | "devolvido"
+  | "concluido"
+  | "em_pagamento";
+
+function advance(current: StepKind, hasQuarto: boolean): StepKind {
+  switch (current) {
+    case "criador":
+      return hasQuarto ? "quarto" : "adjunta";
+    case "quarto":
+      return "adjunta";
+    case "adjunta":
+      return "diretor_geral";
+    case "diretor_geral":
+      return "presidente";
+    case "presidente":
+      return "pagamento";
+    default:
+      // legacy fallback
+      return "adjunta";
+  }
 }
 
 // ---------- Create
@@ -18,7 +50,8 @@ const createSchema = z.object({
   department: z.string().trim().min(1).max(100),
   description: z.string().trim().max(2000).optional(),
   priority: z.enum(["baixa", "media", "alta"]),
-  recipient_id: z.string().uuid(),
+  recipient_id: z.string().uuid(), // primeiro responsável (4º parecer ou Adjunta)
+  quarto_user_id: z.string().uuid().optional(), // se presente, fluxo inicia no 4º parecer
   attachments: z
     .array(z.object({ file_path: z.string(), file_name: z.string(), mime_type: z.string().optional(), size_bytes: z.number().optional() }))
     .optional(),
@@ -29,6 +62,9 @@ export const createProcess = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => createSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    const hasQuarto = !!data.quarto_user_id;
+    const firstStep: StepKind = hasQuarto ? "quarto" : "adjunta";
+
     const { data: proc, error } = await supabase
       .from("processes")
       .insert({
@@ -37,9 +73,10 @@ export const createProcess = createServerFn({ method: "POST" })
         department: data.department,
         description: data.description ?? null,
         priority: data.priority,
-        status: "pendente",
-        current_step: "chefe",
+        status: "em_analise",
+        current_step: firstStep,
         current_user_id: data.recipient_id,
+        quarto_user_id: data.quarto_user_id ?? null,
         created_by: userId,
       })
       .select()
@@ -80,14 +117,14 @@ export const createProcess = createServerFn({ method: "POST" })
 const decisionSchema = z
   .object({
     process_id: z.string().uuid(),
-    action: z.enum(["favoravel", "nao_favoravel", "devolver"]),
+    action: z.enum(["favoravel", "nao_favoravel", "devolver", "reenviar"]),
     comment: z.string().trim().max(2000).optional(),
     next_user_id: z.string().uuid().optional(),
   })
-  .refine((d) => d.action === "favoravel" || (d.comment && d.comment.length >= 3), {
-    message: "Comentário obrigatório para rejeição ou devolução",
-    path: ["comment"],
-  });
+  .refine(
+    (d) => d.action === "favoravel" || d.action === "reenviar" || (d.comment && d.comment.length >= 3),
+    { message: "Comentário obrigatório para parecer não favorável ou devolução", path: ["comment"] },
+  );
 
 export const submitDecision = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -101,49 +138,78 @@ export const submitDecision = createServerFn({ method: "POST" })
       .eq("id", data.process_id)
       .single();
     if (pErr || !proc) throw new Error("Processo não encontrado");
-    if (proc.status === "concluido" || proc.status === "rejeitado") {
+    if (proc.status === "concluido" || proc.status === "rejeitado" || proc.status === "em_pagamento") {
       throw new Error("Processo já encerrado");
     }
     if (proc.current_user_id !== userId) {
       throw new Error("Apenas o responsável atual pode tomar decisões");
     }
 
-    let newStatus: "pendente" | "em_analise" | "aprovado" | "rejeitado" | "devolvido" | "concluido" = proc.status;
-    let newStep = proc.current_step as StepKind;
+    const currentStep = proc.current_step as StepKind;
+    const hasQuarto = !!proc.quarto_user_id;
+
+    let newStatus: ProcStatus = proc.status as ProcStatus;
+    let newStep: StepKind = currentStep;
     let newCurrent: string | null = proc.current_user_id;
-    let action: "favoravel" | "nao_favoravel" | "devolvido" | "arquivado" = "favoravel";
+    let action: "favoravel" | "nao_favoravel" | "devolvido" | "reenviado" | "concluido" | "rejeitado" = "favoravel";
+    let notifyMsg = "";
 
+    const isDirector = currentStep === "quarto" || currentStep === "adjunta" || currentStep === "diretor_geral";
+    const isPresident = currentStep === "presidente";
+    const isCreatorResubmitting = proc.status === "devolvido" && currentStep === "criador";
 
-    if (data.action === "favoravel") {
-      action = "favoravel";
-      const next = nextStep(proc.current_step as StepKind);
-      if (next === "arquivo") {
-        newStep = "arquivo";
-        newStatus = "concluido";
+    if (data.action === "reenviar") {
+      // Criador reenvia processo devolvido: continua para Adjunta (ou 4º se ainda não passou)
+      if (!isCreatorResubmitting) throw new Error("Só é possível reenviar um processo devolvido");
+      if (!data.next_user_id) throw new Error("Selecione o próximo responsável");
+      action = "reenviado";
+      newStep = hasQuarto ? "quarto" : "adjunta";
+      newStatus = "em_analise";
+      newCurrent = data.next_user_id;
+      notifyMsg = `Processo ${proc.numero} reenviado após correcções`;
+    } else if (data.action === "favoravel") {
+      if (isPresident) {
+        // Presidente favorável → concluído, vai para pagamento
+        action = "concluido";
+        newStep = "pagamento";
+        newStatus = "em_pagamento";
         newCurrent = null;
+        notifyMsg = `Processo ${proc.numero} aprovado pelo Presidente — em pagamento`;
       } else {
         if (!data.next_user_id) throw new Error("Selecione o próximo responsável");
-        newStep = next;
+        action = "favoravel";
+        newStep = advance(currentStep, hasQuarto);
         newStatus = "em_analise";
         newCurrent = data.next_user_id;
+        notifyMsg = `Processo ${proc.numero} encaminhado com parecer favorável`;
       }
     } else if (data.action === "nao_favoravel") {
-      action = "nao_favoravel";
-      newStatus = "rejeitado";
-      newCurrent = proc.created_by;
+      if (isPresident) {
+        // Presidente não favorável → rejeitado
+        action = "rejeitado";
+        newStatus = "rejeitado";
+        newCurrent = proc.created_by;
+        newStep = currentStep;
+        notifyMsg = `Processo ${proc.numero} rejeitado pelo Presidente`;
+      } else if (isDirector) {
+        // Directores podem dar não favorável, mas processo segue até o Presidente
+        if (!data.next_user_id) throw new Error("Selecione o próximo responsável");
+        action = "nao_favoravel";
+        newStep = advance(currentStep, hasQuarto);
+        newStatus = "em_analise";
+        newCurrent = data.next_user_id;
+        notifyMsg = `Processo ${proc.numero}: parecer não favorável registado, segue para próxima etapa`;
+      } else {
+        throw new Error("Acção não permitida nesta etapa");
+      }
     } else {
+      // devolver: directores podem devolver para criador corrigir
+      if (!isDirector && !isPresident) throw new Error("Acção não permitida nesta etapa");
       action = "devolvido";
       newStatus = "devolvido";
-      // return to previous from_user
-      const { data: lastStep } = await supabase
-        .from("process_steps")
-        .select("from_user")
-        .eq("process_id", proc.id)
-        .neq("from_user", userId)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      newCurrent = lastStep?.from_user ?? proc.created_by;
+      newCurrent = proc.created_by;
+      newStep = "criador";
+      notifyMsg = `Processo ${proc.numero} devolvido para correcção`;
     }
 
     await supabase.from("process_steps").insert({
@@ -167,12 +233,14 @@ export const submitDecision = createServerFn({ method: "POST" })
       await supabase.from("notifications").insert({
         user_id: newCurrent,
         process_id: proc.id,
-        message: `Processo ${proc.numero} requer a sua atenção (${action})`,
+        message: notifyMsg,
       });
     }
 
     return { ok: true };
   });
+
+
 
 // ---------- Lists
 export const listMyInbox = createServerFn({ method: "GET" })
