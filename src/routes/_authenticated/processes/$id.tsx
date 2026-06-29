@@ -38,13 +38,13 @@ function ProcessDetail() {
   }, []);
 
   const decide = useMutation({
-    mutationFn: (action: "favoravel" | "nao_favoravel" | "devolver") =>
+    mutationFn: (action: "favoravel" | "nao_favoravel" | "devolver" | "reenviar") =>
       decideFn({
         data: {
           process_id: id,
           action,
           comment: comment || undefined,
-          next_user_id: action === "favoravel" ? nextUser || undefined : undefined,
+          next_user_id: action === "favoravel" || action === "reenviar" ? nextUser || undefined : undefined,
         },
       }),
     onSuccess: () => {
@@ -63,8 +63,12 @@ function ProcessDetail() {
 
   const { process, steps, attachments, profiles, signedUrls } = q.data;
   const isResponsible = currentUserId === process.current_user_id;
-  const isClosed = process.status === "concluido" || process.status === "rejeitado";
-  const isLastStep = process.current_step === "diretor_geral";
+  const isClosed =
+    process.status === "concluido" || process.status === "rejeitado" || process.status === "em_pagamento";
+  const isPresident = process.current_step === "presidente";
+  const isCreatorResubmit = process.status === "devolvido" && process.current_step === "criador";
+  const requiresNextUser = !isPresident && !isCreatorResubmit;
+
 
   return (
     <div className="max-w-7xl space-y-6">
