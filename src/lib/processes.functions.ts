@@ -2,8 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-// New flow: criador → (quarto opcional) → adjunta → diretor_geral → presidente → pagamento
-const FLOW_ORDER = ["criador", "quarto", "adjunta", "diretor_geral", "presidente", "pagamento"] as const;
+// Full flow: criador → (quarto opcional) → adjunta → diretor_geral → presidente → pagamento → assinatura_carta → concluido
+const FLOW_ORDER = ["criador", "quarto", "adjunta", "diretor_geral", "presidente", "pagamento", "assinatura_carta"] as const;
 type StepKind =
   | "criador"
   | "quarto"
@@ -11,6 +11,7 @@ type StepKind =
   | "diretor_geral"
   | "presidente"
   | "pagamento"
+  | "assinatura_carta"
   // legacy values still present in DB
   | "chefe"
   | "diretor"
@@ -23,7 +24,8 @@ type ProcStatus =
   | "rejeitado"
   | "devolvido"
   | "concluido"
-  | "em_pagamento";
+  | "em_pagamento"
+  | "aguarda_assinatura";
 
 function advance(current: StepKind, hasQuarto: boolean): StepKind {
   switch (current) {
@@ -37,6 +39,8 @@ function advance(current: StepKind, hasQuarto: boolean): StepKind {
       return "presidente";
     case "presidente":
       return "pagamento";
+    case "pagamento":
+      return "assinatura_carta";
     default:
       // legacy fallback
       return "adjunta";
@@ -138,7 +142,7 @@ export const submitDecision = createServerFn({ method: "POST" })
       .eq("id", data.process_id)
       .single();
     if (pErr || !proc) throw new Error("Processo não encontrado");
-    if (proc.status === "concluido" || proc.status === "rejeitado" || proc.status === "em_pagamento") {
+    if (proc.status === "concluido" || proc.status === "rejeitado") {
       throw new Error("Processo já encerrado");
     }
     if (proc.current_user_id !== userId) {
@@ -156,10 +160,12 @@ export const submitDecision = createServerFn({ method: "POST" })
 
     const isDirector = currentStep === "quarto" || currentStep === "adjunta" || currentStep === "diretor_geral";
     const isPresident = currentStep === "presidente";
+    const isPagamento = currentStep === "pagamento";
+    const isAssinatura = currentStep === "assinatura_carta";
     const isCreatorResubmitting = proc.status === "devolvido" && currentStep === "criador";
 
     if (data.action === "reenviar") {
-      // Criador reenvia processo devolvido: continua para Adjunta (ou 4º se ainda não passou)
+      // Criador reenvia processo devolvido
       if (!isCreatorResubmitting) throw new Error("Só é possível reenviar um processo devolvido");
       if (!data.next_user_id) throw new Error("Selecione o próximo responsável");
       action = "reenviado";
@@ -168,12 +174,28 @@ export const submitDecision = createServerFn({ method: "POST" })
       newCurrent = data.next_user_id;
       notifyMsg = `Processo ${proc.numero} reenviado após correcções`;
     } else if (data.action === "favoravel") {
-      if (isPresident) {
-        // Presidente favorável → concluído, vai para pagamento
+      if (isAssinatura) {
+        // Assinatura concluída → processo concluído definitivamente
+        action = "carta_assinada" as typeof action;
+        newStep = "assinatura_carta";
+        newStatus = "concluido";
+        newCurrent = null;
+        notifyMsg = `Processo ${proc.numero} concluído — carta assinada para o banco`;
+      } else if (isPagamento) {
+        // Pagamento processado → enviar para assinatura da carta
+        if (!data.next_user_id) throw new Error("Selecione quem vai assinar a carta");
+        action = "favoravel";
+        newStep = "assinatura_carta";
+        newStatus = "aguarda_assinatura";
+        newCurrent = data.next_user_id;
+        notifyMsg = `Processo ${proc.numero} — pagamento processado, aguarda assinatura da carta`;
+      } else if (isPresident) {
+        // Presidente favorável → vai para pagamento
+        if (!data.next_user_id) throw new Error("Selecione o responsável pelo pagamento");
         action = "concluido";
         newStep = "pagamento";
         newStatus = "em_pagamento";
-        newCurrent = null;
+        newCurrent = data.next_user_id;
         notifyMsg = `Processo ${proc.numero} aprovado pelo Presidente — em pagamento`;
       } else {
         if (!data.next_user_id) throw new Error("Selecione o próximo responsável");
@@ -291,16 +313,18 @@ export const dashboardCounts = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
-    const [pending, created, done, returned] = await Promise.all([
-      supabase.from("processes").select("id", { count: "exact", head: true }).eq("current_user_id", userId).not("status", "in", "(concluido,rejeitado,em_pagamento)"),
+    const [pending, created, done, returned, inPayment, awaitingSig] = await Promise.all([
+      supabase.from("processes").select("id", { count: "exact", head: true }).eq("current_user_id", userId).not("status", "in", "(concluido,rejeitado)"),
       supabase.from("processes").select("id", { count: "exact", head: true }).eq("created_by", userId),
       supabase.from("processes").select("id", { count: "exact", head: true }).eq("created_by", userId).eq("status", "concluido"),
       supabase.from("processes").select("id", { count: "exact", head: true }).eq("created_by", userId).eq("status", "devolvido"),
+      supabase.from("processes").select("id", { count: "exact", head: true }).eq("created_by", userId).eq("status", "em_pagamento"),
+      supabase.from("processes").select("id", { count: "exact", head: true }).eq("created_by", userId).eq("status", "aguarda_assinatura"),
     ]);
     return {
       pending: pending.count ?? 0,
       created: created.count ?? 0,
-      done: done.count ?? 0,
+      done: (done.count ?? 0) + (inPayment.count ?? 0) + (awaitingSig.count ?? 0),
       returned: returned.count ?? 0,
     };
   });

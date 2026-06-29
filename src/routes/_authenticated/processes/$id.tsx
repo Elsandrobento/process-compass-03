@@ -64,10 +64,12 @@ function ProcessDetail() {
   const { process, steps, attachments, profiles, signedUrls } = q.data;
   const isResponsible = currentUserId === process.current_user_id;
   const isClosed =
-    process.status === "concluido" || process.status === "rejeitado" || process.status === "em_pagamento";
+    process.status === "concluido" || process.status === "rejeitado";
   const isPresident = process.current_step === "presidente";
+  const isPagamento = process.current_step === "pagamento";
+  const isAssinatura = process.current_step === "assinatura_carta";
   const isCreatorResubmit = process.status === "devolvido" && process.current_step === "criador";
-  const requiresNextUser = !isPresident && !isCreatorResubmit;
+  const requiresNextUser = !isPresident && !isCreatorResubmit && !isAssinatura;
 
 
   return (
@@ -156,6 +158,14 @@ function ProcessDetail() {
                     >
                       <ArrowRight className="h-4 w-4 mr-2" /> Reenviar para Adjunta
                     </Button>
+                  ) : isAssinatura ? (
+                    <Button
+                      onClick={() => decide.mutate("favoravel")}
+                      disabled={decide.isPending}
+                      className="bg-success text-success-foreground hover:bg-success/90"
+                    >
+                      <CheckCircle2 className="h-4 w-4 mr-2" /> Assinar Carta e Concluir Processo
+                    </Button>
                   ) : (
                     <>
                       <Button
@@ -164,27 +174,35 @@ function ProcessDetail() {
                         className="bg-success text-success-foreground hover:bg-success/90"
                       >
                         <CheckCircle2 className="h-4 w-4 mr-2" />
-                        {isPresident ? "Aprovar e enviar para pagamento" : "Favorável"}
+                        {isPresident
+                          ? "Aprovar — enviar para pagamento"
+                          : isPagamento
+                          ? "Confirmar Pagamento → Assinatura de Carta"
+                          : "Favorável"}
                       </Button>
-                      <Button
-                        onClick={() => decide.mutate("nao_favoravel")}
-                        disabled={
-                          decide.isPending ||
-                          comment.trim().length < 3 ||
-                          (requiresNextUser && !nextUser)
-                        }
-                        variant="destructive"
-                      >
-                        <XCircle className="h-4 w-4 mr-2" />
-                        {isPresident ? "Rejeitar processo" : "Não favorável (continua)"}
-                      </Button>
-                      <Button
-                        onClick={() => decide.mutate("devolver")}
-                        disabled={decide.isPending || comment.trim().length < 3}
-                        variant="outline"
-                      >
-                        <Undo2 className="h-4 w-4 mr-2" /> Devolver ao criador
-                      </Button>
+                      {!isPagamento && (
+                        <>
+                          <Button
+                            onClick={() => decide.mutate("nao_favoravel")}
+                            disabled={
+                              decide.isPending ||
+                              comment.trim().length < 3 ||
+                              (requiresNextUser && !nextUser)
+                            }
+                            variant="destructive"
+                          >
+                            <XCircle className="h-4 w-4 mr-2" />
+                            {isPresident ? "Rejeitar processo" : "Não favorável (continua)"}
+                          </Button>
+                          <Button
+                            onClick={() => decide.mutate("devolver")}
+                            disabled={decide.isPending || comment.trim().length < 3}
+                            variant="outline"
+                          >
+                            <Undo2 className="h-4 w-4 mr-2" /> Devolver ao criador
+                          </Button>
+                        </>
+                      )}
                     </>
                   )}
                 </div>

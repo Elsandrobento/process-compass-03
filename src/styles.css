@@ -119,3 +119,50 @@
     font-family: var(--font-sans);
   }
 }
+
+/* ---- Dashboard Animations ---- */
+@keyframes slide-up-fade {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+
+@keyframes bar-grow {
+  from { width: 0%; }
+  to   { width: var(--bar-w, 100%); }
+}
+
+.animate-slide-up   { animation: slide-up-fade 0.45s cubic-bezier(0.22,1,0.36,1) both; }
+.animate-scale-in   { animation: scale-in 0.4s cubic-bezier(0.22,1,0.36,1) both; }
+.animate-count-up   { animation: count-up 0.5s cubic-bezier(0.22,1,0.36,1) both; }
+.animate-pulse-soft { animation: pulse-soft 2s ease-in-out infinite; }
+.animate-bar-grow   { animation: bar-grow 0.8s cubic-bezier(0.22,1,0.36,1) both; }
+
+/* Stagger delays for lists */
+.stagger-1  { animation-delay: 0.05s; }
+.stagger-2  { animation-delay: 0.10s; }
+.stagger-3  { animation-delay: 0.15s; }
+.stagger-4  { animation-delay: 0.20s; }
+.stagger-5  { animation-delay: 0.25s; }
+.stagger-6  { animation-delay: 0.30s; }
+.stagger-7  { animation-delay: 0.35s; }
+.stagger-8  { animation-delay: 0.40s; }
