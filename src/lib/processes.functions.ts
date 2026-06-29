@@ -220,7 +220,8 @@ export const submitDecision = createServerFn({ method: "POST" })
       comment: data.comment ?? null,
     });
 
-    await supabase
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error: updateError } = await supabaseAdmin
       .from("processes")
       .update({
         status: newStatus,
@@ -228,6 +229,8 @@ export const submitDecision = createServerFn({ method: "POST" })
         current_user_id: newCurrent,
       })
       .eq("id", proc.id);
+    
+    if (updateError) throw new Error("Erro ao atualizar o processo: " + updateError.message);
 
     if (newCurrent) {
       await supabase.from("notifications").insert({

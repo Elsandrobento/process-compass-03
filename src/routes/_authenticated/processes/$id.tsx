@@ -44,7 +44,7 @@ function ProcessDetail() {
           process_id: id,
           action,
           comment: comment || undefined,
-          next_user_id: action === "favoravel" || action === "reenviar" ? nextUser || undefined : undefined,
+          next_user_id: action === "favoravel" || action === "reenviar" || action === "nao_favoravel" ? nextUser || undefined : undefined,
         },
       }),
     onSuccess: () => {
