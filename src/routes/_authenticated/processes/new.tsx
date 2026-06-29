@@ -212,7 +212,7 @@ function NewProcessPage() {
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="outline" onClick={() => navigate({ to: "/dashboard" })}>Cancelar</Button>
           <Button
-            disabled={create.isPending || !title || !department || !recipient}
+            disabled={create.isPending || !title || !department || !recipient || (hasQuarto && !quartoUser)}
             onClick={() => create.mutate()}
           >
             Criar processo
