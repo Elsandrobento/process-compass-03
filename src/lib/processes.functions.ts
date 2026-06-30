@@ -1,6 +1,71 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { Resend } from 'resend';
+
+const resend = new Resend(process.env.RESEND_API_KEY || 're_mock_key_if_missing');
+
+async function sendEmailNotification(to: string, subject: string, processTitle: string, link: string) {
+  if (!process.env.RESEND_API_KEY) {
+    console.log("Mock Email sent to", to, subject, link);
+    return;
+  }
+  try {
+    await resend.emails.send({
+      from: 'Intellectus <noreply@intellectus.com>',
+      to: [to],
+      subject: subject,
+      html: `<h2>Notificação de Processo</h2>
+             <p>Tem um novo processo na sua caixa de entrada.</p>
+             <p><strong>Processo:</strong> ${processTitle}</p>
+             <a href="${link}" style="display:inline-block;padding:10px 20px;background:#007bff;color:#fff;text-decoration:none;border-radius:5px;">Ver Processo</a>`,
+    });
+  } catch (error) {
+    console.error("Failed to send email", error);
+  }
+}
+
+async function checkAndTriggerSLAs(supabase: any) {
+  try {
+    // Buscar processos de prioridade alta, não concluídos, com SLA > 48h (aprox 2 dias) e que ainda não alertaram
+    const { data: overSLA } = await supabase
+      .from("processes")
+      .select("id, numero, title, current_step, updated_at")
+      .eq("priority", "alta")
+      .eq("sla_alert_sent", false)
+      .in("status", ["pendente", "em_analise", "aguarda_assinatura", "em_pagamento"]);
+
+    if (!overSLA || overSLA.length === 0) return;
+
+    const now = new Date();
+    for (const p of overSLA) {
+      const updatedAt = new Date(p.updated_at);
+      const diffHours = (now.getTime() - updatedAt.getTime()) / (1000 * 60 * 60);
+      
+      if (diffHours > 48) {
+        // Marcar como alertado
+        await supabase.from("processes").update({ sla_alert_sent: true }).eq("id", p.id);
+        
+        // Encontrar o Presidente e Diretor Geral para notificar
+        const { data: usersToAlert } = await supabase
+          .from("user_roles")
+          .select("user_id, role")
+          .in("role", ["presidente", "diretor_geral"]);
+          
+        if (usersToAlert) {
+          const notifications = usersToAlert.map((u: any) => ({
+            user_id: u.user_id,
+            process_id: p.id,
+            message: `⚠️ ALERTA SLA: O processo ${p.numero} (${p.title}) está atrasado há mais de 48h no passo ${p.current_step}!`,
+          }));
+          await supabase.from("notifications").insert(notifications);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Erro ao verificar SLA", err);
+  }
+}
 
 // Full flow: criador → (quarto opcional) → adjunta → diretor_geral → presidente → pagamento → assinatura_carta → concluido
 const FLOW_ORDER = ["criador", "quarto", "adjunta", "diretor_geral", "presidente", "pagamento", "assinatura_carta"] as const;
@@ -124,6 +189,9 @@ const decisionSchema = z
     action: z.enum(["favoravel", "nao_favoravel", "devolver", "reenviar"]),
     comment: z.string().trim().max(2000).optional(),
     next_user_id: z.string().uuid().optional(),
+    attachments: z
+      .array(z.object({ file_path: z.string(), file_name: z.string(), mime_type: z.string().optional(), size_bytes: z.number().optional() }))
+      .optional(),
   })
   .refine(
     (d) => d.action === "favoravel" || d.action === "reenviar" || (d.comment && d.comment.length >= 3),
@@ -234,13 +302,27 @@ export const submitDecision = createServerFn({ method: "POST" })
       notifyMsg = `Processo ${proc.numero} devolvido para correcção`;
     }
 
-    await supabase.from("process_steps").insert({
+    const { data: step, error: stepErr } = await supabase.from("process_steps").insert({
       process_id: proc.id,
       from_user: userId,
       to_user: newCurrent,
       action,
       comment: data.comment ?? null,
-    });
+    }).select("id").single();
+
+    if (step && data.attachments?.length) {
+      await supabase.from("attachments").insert(
+        data.attachments.map((a) => ({
+          process_id: proc.id,
+          step_id: step.id,
+          file_path: a.file_path,
+          file_name: a.file_name,
+          mime_type: a.mime_type ?? null,
+          size_bytes: a.size_bytes ?? null,
+          uploaded_by: userId,
+        }))
+      );
+    }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error: updateError } = await supabaseAdmin
@@ -260,6 +342,15 @@ export const submitDecision = createServerFn({ method: "POST" })
         process_id: proc.id,
         message: notifyMsg,
       });
+
+      // Send email notification
+      const { data: profile } = await supabaseAdmin.from("profiles").select("email").eq("id", newCurrent).single();
+      if (profile?.email) {
+        // App root URL is usually dynamic in production, hardcoding an approximation for now, or use a dummy domain
+        const appUrl = process.env.VITE_APP_URL || 'http://localhost:5173';
+        const link = `${appUrl}/processes/${proc.id}`;
+        await sendEmailNotification(profile.email, `Nova Acção: ${proc.title}`, proc.title, link);
+      }
     }
 
     return { ok: true };
@@ -271,6 +362,9 @@ export const submitDecision = createServerFn({ method: "POST" })
 export const listMyInbox = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await checkAndTriggerSLAs(supabaseAdmin);
+    
     const { supabase, userId } = context;
     const { data, error } = await supabase
       .from("processes")
@@ -312,6 +406,9 @@ export const listArchive = createServerFn({ method: "GET" })
 export const dashboardCounts = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await checkAndTriggerSLAs(supabaseAdmin);
+    
     const { supabase, userId } = context;
     const [pending, created, done, returned, inPayment, awaitingSig] = await Promise.all([
       supabase.from("processes").select("id", { count: "exact", head: true }).eq("current_user_id", userId).not("status", "in", "(concluido,rejeitado)"),
@@ -463,4 +560,39 @@ export const setUserRole = createServerFn({ method: "POST" })
       await supabase.from("user_roles").delete().eq("user_id", data.user_id).eq("role", data.role);
     }
     return { ok: true };
+  });
+
+// ---------- Comments / Fórum Interno
+export const listComments = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: string) => z.string().uuid().parse(d))
+  .handler(async ({ data: processId, context }) => {
+    const { supabase } = context;
+    const { data, error } = await supabase
+      .from("process_comments")
+      .select("*, profile:profiles(nome, email)")
+      .eq("process_id", processId)
+      .order("created_at", { ascending: true });
+      
+    if (error) throw new Error(error.message);
+    return data;
+  });
+
+export const addComment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { process_id: string, content: string }) => z.object({ process_id: z.string().uuid(), content: z.string().min(1) }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: comment, error } = await supabase
+      .from("process_comments")
+      .insert({
+        process_id: data.process_id,
+        user_id: userId,
+        content: data.content,
+      })
+      .select("*, profile:profiles(nome, email)")
+      .single();
+      
+    if (error) throw new Error(error.message);
+    return comment;
   });

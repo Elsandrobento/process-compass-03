@@ -10,6 +10,8 @@ import { TYPE_LABEL, PRIORITY_LABEL, STEP_LABEL, ACTION_LABEL } from "@/lib/proc
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ChatPanel } from "@/components/chat-panel";
+import { DragDropZone, type UploadedFile } from "@/components/drag-drop-zone";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect } from "react";
 
@@ -32,6 +34,7 @@ function ProcessDetail() {
   const [comment, setComment] = useState("");
   const [nextUser, setNextUser] = useState("");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [newAttachments, setNewAttachments] = useState<UploadedFile[]>([]);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null));
@@ -45,12 +48,14 @@ function ProcessDetail() {
           action,
           comment: comment || undefined,
           next_user_id: action === "favoravel" || action === "reenviar" || action === "nao_favoravel" ? nextUser || undefined : undefined,
+          attachments: newAttachments.length > 0 ? newAttachments : undefined,
         },
       }),
     onSuccess: () => {
       toast.success("Decisão registada");
       setComment("");
       setNextUser("");
+      setNewAttachments([]);
       qc.invalidateQueries({ queryKey: ["process", id] });
       qc.invalidateQueries({ queryKey: ["inbox"] });
       qc.invalidateQueries({ queryKey: ["dashboard-counts"] });
@@ -71,12 +76,20 @@ function ProcessDetail() {
   const isCreatorResubmit = process.status === "devolvido" && process.current_step === "criador";
   const requiresNextUser = !isPresident && !isCreatorResubmit && !isAssinatura;
 
+  const isSlaBreached = process.priority === "alta" && !isClosed && (new Date().getTime() - new Date(process.updated_at).getTime()) / (1000 * 60 * 60) > 48;
 
   return (
     <div className="max-w-7xl space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="text-xs text-muted-foreground font-medium">{process.numero}</div>
+          <div className="text-xs text-muted-foreground font-medium flex items-center gap-2">
+            {process.numero}
+            {isSlaBreached && (
+              <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-destructive bg-destructive/10 px-1.5 py-0.5 rounded animate-pulse">
+                SLA Expirado (48h)
+              </span>
+            )}
+          </div>
           <h1 className="text-2xl font-semibold tracking-tight mt-1">{process.title}</h1>
           <div className="flex flex-wrap items-center gap-2 mt-2 text-sm text-muted-foreground">
             <span>{TYPE_LABEL[process.type]}</span>·<span>{process.department}</span>·
@@ -84,6 +97,7 @@ function ProcessDetail() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <ChatPanel processId={process.id} currentUserId={currentUserId} />
           <StatusBadge status={process.status} />
           <Button variant="ghost" onClick={() => navigate({ to: "/inbox" })}>Voltar</Button>
         </div>
@@ -149,6 +163,14 @@ function ProcessDetail() {
                     </Select>
                   </div>
                 )}
+                
+                <div className="pt-2">
+                  <div className="text-xs text-muted-foreground mb-2">
+                    Anexar ficheiros (opcional):
+                  </div>
+                  <DragDropZone onUploadComplete={setNewAttachments} />
+                </div>
+
                 <div className="flex flex-wrap gap-2">
                   {isCreatorResubmit ? (
                     <Button

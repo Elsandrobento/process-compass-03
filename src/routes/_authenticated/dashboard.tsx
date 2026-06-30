@@ -207,7 +207,12 @@ function Dashboard() {
                     <div className="flex items-center gap-3 min-w-0">
                       <PriorityDot priority={p.priority} />
                       <div className="min-w-0">
-                        <div className="font-medium truncate text-sm group-hover:text-primary transition-colors">{p.title}</div>
+                        <div className="font-medium truncate text-sm group-hover:text-primary transition-colors flex items-center gap-2">
+                          {p.title}
+                          {p.priority === 'alta' && (new Date().getTime() - new Date(p.updated_at).getTime()) / (1000 * 60 * 60) > 48 && (
+                            <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" title="SLA Expirado (> 48h)"></span>
+                          )}
+                        </div>
                         <div className="text-xs text-muted-foreground mt-0.5">
                           {p.numero} · {TYPE_LABEL[p.type]} · {STEP_LABEL[p.current_step] ?? p.current_step}
                         </div>
