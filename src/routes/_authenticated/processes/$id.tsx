@@ -74,7 +74,7 @@ function ProcessDetail() {
   const isPagamento = process.current_step === "pagamento";
   const isAssinatura = process.current_step === "assinatura_carta";
   const isCreatorResubmit = process.status === "devolvido" && process.current_step === "criador";
-  const requiresNextUser = !isPresident && !isCreatorResubmit && !isAssinatura;
+  const requiresNextUser = !isPresident && !isPagamento && !isCreatorResubmit && !isAssinatura;
 
   const isSlaBreached = process.priority === "alta" && !isClosed && (new Date().getTime() - new Date(process.updated_at).getTime()) / (1000 * 60 * 60) > 48;
 
