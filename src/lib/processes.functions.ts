@@ -590,9 +590,9 @@ export const addComment = createServerFn({ method: "POST" })
   .validator((d: { process_id: string, content: string }) => z.object({ process_id: z.string().uuid(), content: z.string().min(1) }).parse(d))
   .handler(async ({ data, context }) => {
     const { userId } = context;
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    
-    const { data: comment, error } = await supabaseAdmin
+    const supabase = context.supabase;
+
+    const { data: comment, error } = await supabase
       .from("process_comments")
       .insert({
         process_id: data.process_id,
@@ -601,10 +601,10 @@ export const addComment = createServerFn({ method: "POST" })
       })
       .select("*")
       .single();
-      
+
     if (error) throw new Error(error.message);
 
-    const { data: profile } = await supabaseAdmin.from("profiles").select("id, nome, email").eq("id", userId).single();
-    
+    const { data: profile } = await supabase.from("profiles").select("id, nome, email").eq("id", userId).single();
+
     return { ...comment, profile };
   });
