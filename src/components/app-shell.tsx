@@ -82,7 +82,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <FileText className="h-4 w-4" />
           </div>
           <div>
-            <div className="font-semibold leading-tight">Intellectus</div>
+            <div className="font-semibold leading-tight">Simplifica</div>
             <div className="text-xs opacity-70 leading-tight">Gestão de Processos</div>
           </div>
         </div>
@@ -115,7 +115,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     <FileText className="h-4 w-4" />
                   </div>
                   <div>
-                    <div className="font-semibold leading-tight">Intellectus</div>
+                    <div className="font-semibold leading-tight">Simplifica</div>
                     <div className="text-xs opacity-70 leading-tight">Gestão de Processos</div>
                   </div>
                 </div>
@@ -132,7 +132,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </div>
               </SheetContent>
             </Sheet>
-            <div className="font-semibold">Intellectus</div>
+            <div className="font-semibold">Simplifica</div>
           </div>
           <div className="flex-1 hidden md:block" />
           <div className="flex items-center gap-2 ml-auto">

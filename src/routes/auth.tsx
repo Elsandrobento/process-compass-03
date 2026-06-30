@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
-    meta: [{ title: "Entrar — Intellectus" }, { name: "robots", content: "noindex" }],
+    meta: [{ title: "Entrar — Simplifica" }, { name: "robots", content: "noindex" }],
   }),
   component: AuthPage,
 });
@@ -81,7 +81,7 @@ function AuthPage() {
           <div className="h-8 w-8 rounded bg-primary text-primary-foreground flex items-center justify-center">
             <FileText className="h-4 w-4" />
           </div>
-          Intellectus
+          Simplifica
         </Link>
         <div className="bg-card border rounded-lg p-6 shadow-sm">
           <Tabs defaultValue="signin">

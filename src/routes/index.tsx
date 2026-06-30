@@ -5,10 +5,10 @@ import { Button } from "@/components/ui/button";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Intellectus — Gestão de Processos Administrativos" },
+      { title: "Simplifica — Gestão de Processos Administrativos" },
       {
         name: "description",
-        content: "Plataforma interna para criar, encaminhar e arquivar processos administrativos da Intellectus.",
+        content: "Plataforma interna para criar, encaminhar e arquivar processos administrativos da Simplifica.",
       },
     ],
   }),
@@ -23,7 +23,7 @@ function Landing() {
           <div className="h-8 w-8 rounded bg-primary text-primary-foreground flex items-center justify-center">
             <FileText className="h-4 w-4" />
           </div>
-          Intellectus
+          Simplifica
         </div>
         <Button asChild>
           <Link to="/auth">Entrar</Link>
@@ -65,7 +65,7 @@ function Landing() {
       </section>
 
       <footer className="border-t py-6 text-center text-xs text-muted-foreground">
-        © Intellectus — Uso interno
+        © Simplifica — Uso interno
       </footer>
     </div>
   );
