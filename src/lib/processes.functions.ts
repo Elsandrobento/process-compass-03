@@ -567,18 +567,18 @@ export const listComments = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((d: string) => z.string().uuid().parse(d))
   .handler(async ({ data: processId, context }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: comments, error } = await supabaseAdmin
+    const supabase = context.supabase;
+    const { data: comments, error } = await supabase
       .from("process_comments")
       .select("*")
       .eq("process_id", processId)
       .order("created_at", { ascending: true });
-      
+
     if (error) throw new Error(error.message);
 
     if (comments && comments.length > 0) {
       const userIds = [...new Set(comments.map((c) => c.user_id))];
-      const { data: profiles } = await supabaseAdmin.from("profiles").select("id, nome, email").in("id", userIds);
+      const { data: profiles } = await supabase.from("profiles").select("id, nome, email").in("id", userIds);
       const profileMap = Object.fromEntries(profiles?.map((p) => [p.id, p]) || []);
       return comments.map((c) => ({ ...c, profile: profileMap[c.user_id] }));
     }
