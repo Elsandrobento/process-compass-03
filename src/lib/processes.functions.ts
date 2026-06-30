@@ -258,13 +258,31 @@ export const submitDecision = createServerFn({ method: "POST" })
         newCurrent = data.next_user_id;
         notifyMsg = `Processo ${proc.numero} — pagamento processado, aguarda assinatura da carta`;
       } else if (isPresident) {
-        // Presidente favorável → vai para pagamento
-        if (!data.next_user_id) throw new Error("Selecione o responsável pelo pagamento");
+        // Presidente favorável → vai automaticamente para Finanças (Rosita Mabico)
+        const { supabaseAdmin: admin } = await import("@/integrations/supabase/client.server");
+        const { data: rosita } = await admin
+          .from("profiles")
+          .select("id")
+          .ilike("nome", "%rosita%mabico%")
+          .maybeSingle();
+        let paymentOwner: string | undefined = rosita?.id;
+        if (!paymentOwner) {
+          const { data: financas } = await admin
+            .from("profiles")
+            .select("id")
+            .ilike("departamento", "%finan%")
+            .limit(1)
+            .maybeSingle();
+          paymentOwner = financas?.id;
+        }
+        if (!paymentOwner) {
+          throw new Error("Não foi encontrado responsável no departamento de Finanças (Rosita Mabico). Crie a conta primeiro.");
+        }
         action = "concluido";
         newStep = "pagamento";
         newStatus = "em_pagamento";
-        newCurrent = data.next_user_id;
-        notifyMsg = `Processo ${proc.numero} aprovado pelo Presidente — em pagamento`;
+        newCurrent = paymentOwner;
+        notifyMsg = `Processo ${proc.numero} aprovado pelo Presidente — em pagamento (Finanças)`;
       } else {
         if (!data.next_user_id) throw new Error("Selecione o próximo responsável");
         action = "favoravel";
