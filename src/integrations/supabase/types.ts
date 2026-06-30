@@ -23,6 +23,7 @@ export type Database = {
           mime_type: string | null
           process_id: string
           size_bytes: number | null
+          step_id: string | null
           uploaded_by: string
         }
         Insert: {
@@ -33,6 +34,7 @@ export type Database = {
           mime_type?: string | null
           process_id: string
           size_bytes?: number | null
+          step_id?: string | null
           uploaded_by: string
         }
         Update: {
@@ -43,6 +45,7 @@ export type Database = {
           mime_type?: string | null
           process_id?: string
           size_bytes?: number | null
+          step_id?: string | null
           uploaded_by?: string
         }
         Relationships: [
@@ -51,6 +54,13 @@ export type Database = {
             columns: ["process_id"]
             isOneToOne: false
             referencedRelation: "processes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attachments_step_id_fkey"
+            columns: ["step_id"]
+            isOneToOne: false
+            referencedRelation: "process_steps"
             referencedColumns: ["id"]
           },
         ]
@@ -83,6 +93,38 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "notifications_process_id_fkey"
+            columns: ["process_id"]
+            isOneToOne: false
+            referencedRelation: "processes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      process_comments: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          process_id: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          process_id: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          process_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "process_comments_process_id_fkey"
             columns: ["process_id"]
             isOneToOne: false
             referencedRelation: "processes"
@@ -140,6 +182,7 @@ export type Database = {
           numero: string
           priority: Database["public"]["Enums"]["process_priority"]
           quarto_user_id: string | null
+          sla_alert_sent: boolean
           status: Database["public"]["Enums"]["process_status"]
           title: string
           type: Database["public"]["Enums"]["process_type"]
@@ -156,6 +199,7 @@ export type Database = {
           numero?: string
           priority?: Database["public"]["Enums"]["process_priority"]
           quarto_user_id?: string | null
+          sla_alert_sent?: boolean
           status?: Database["public"]["Enums"]["process_status"]
           title: string
           type: Database["public"]["Enums"]["process_type"]
@@ -172,6 +216,7 @@ export type Database = {
           numero?: string
           priority?: Database["public"]["Enums"]["process_priority"]
           quarto_user_id?: string | null
+          sla_alert_sent?: boolean
           status?: Database["public"]["Enums"]["process_status"]
           title?: string
           type?: Database["public"]["Enums"]["process_type"]
@@ -262,6 +307,7 @@ export type Database = {
         | "reenviado"
         | "concluido"
         | "rejeitado"
+        | "carta_assinada"
       process_priority: "baixa" | "media" | "alta"
       process_status:
         | "pendente"
@@ -271,6 +317,7 @@ export type Database = {
         | "devolvido"
         | "concluido"
         | "em_pagamento"
+        | "aguarda_assinatura"
       process_step_kind:
         | "criador"
         | "chefe"
@@ -281,6 +328,7 @@ export type Database = {
         | "adjunta"
         | "presidente"
         | "pagamento"
+        | "assinatura_carta"
       process_type: "pagamento" | "patrimonio" | "rh" | "outros"
     }
     CompositeTypes: {
@@ -429,6 +477,7 @@ export const Constants = {
         "reenviado",
         "concluido",
         "rejeitado",
+        "carta_assinada",
       ],
       process_priority: ["baixa", "media", "alta"],
       process_status: [
@@ -439,6 +488,7 @@ export const Constants = {
         "devolvido",
         "concluido",
         "em_pagamento",
+        "aguarda_assinatura",
       ],
       process_step_kind: [
         "criador",
@@ -450,6 +500,7 @@ export const Constants = {
         "adjunta",
         "presidente",
         "pagamento",
+        "assinatura_carta",
       ],
       process_type: ["pagamento", "patrimonio", "rh", "outros"],
     },

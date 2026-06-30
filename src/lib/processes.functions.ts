@@ -567,18 +567,18 @@ export const listComments = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((d: string) => z.string().uuid().parse(d))
   .handler(async ({ data: processId, context }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: comments, error } = await supabaseAdmin
+    const supabase = context.supabase;
+    const { data: comments, error } = await supabase
       .from("process_comments")
       .select("*")
       .eq("process_id", processId)
       .order("created_at", { ascending: true });
-      
+
     if (error) throw new Error(error.message);
 
     if (comments && comments.length > 0) {
       const userIds = [...new Set(comments.map((c) => c.user_id))];
-      const { data: profiles } = await supabaseAdmin.from("profiles").select("id, nome, email").in("id", userIds);
+      const { data: profiles } = await supabase.from("profiles").select("id, nome, email").in("id", userIds);
       const profileMap = Object.fromEntries(profiles?.map((p) => [p.id, p]) || []);
       return comments.map((c) => ({ ...c, profile: profileMap[c.user_id] }));
     }
@@ -590,9 +590,9 @@ export const addComment = createServerFn({ method: "POST" })
   .validator((d: { process_id: string, content: string }) => z.object({ process_id: z.string().uuid(), content: z.string().min(1) }).parse(d))
   .handler(async ({ data, context }) => {
     const { userId } = context;
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    
-    const { data: comment, error } = await supabaseAdmin
+    const supabase = context.supabase;
+
+    const { data: comment, error } = await supabase
       .from("process_comments")
       .insert({
         process_id: data.process_id,
@@ -601,10 +601,10 @@ export const addComment = createServerFn({ method: "POST" })
       })
       .select("*")
       .single();
-      
+
     if (error) throw new Error(error.message);
 
-    const { data: profile } = await supabaseAdmin.from("profiles").select("id, nome, email").eq("id", userId).single();
-    
+    const { data: profile } = await supabase.from("profiles").select("id, nome, email").eq("id", userId).single();
+
     return { ...comment, profile };
   });
