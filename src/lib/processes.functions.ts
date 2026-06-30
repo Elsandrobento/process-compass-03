@@ -428,21 +428,28 @@ export const dashboardCounts = createServerFn({ method: "GET" })
     await checkAndTriggerSLAs(supabaseAdmin);
     
     const { supabase, userId } = context;
-    const [pending, created, done, returned, inPayment, awaitingSig] = await Promise.all([
-      supabase.from("processes").select("id", { count: "exact", head: true }).eq("current_user_id", userId).not("status", "in", "(concluido,rejeitado)"),
-      supabase.from("processes").select("id", { count: "exact", head: true }).eq("created_by", userId),
-      supabase.from("processes").select("id", { count: "exact", head: true }).eq("created_by", userId).eq("status", "concluido"),
-      supabase.from("processes").select("id", { count: "exact", head: true }).eq("created_by", userId).eq("status", "devolvido"),
-      supabase.from("processes").select("id", { count: "exact", head: true }).eq("created_by", userId).eq("status", "em_pagamento"),
-      supabase.from("processes").select("id", { count: "exact", head: true }).eq("created_by", userId).eq("status", "aguarda_assinatura"),
+
+    // Collect all process ids the user participates in: created OR appears in a step
+    const [{ data: createdRows }, { data: stepRows }] = await Promise.all([
+      supabase.from("processes").select("id,status,current_user_id,created_by"),
+      supabase.from("process_steps").select("process_id").or(`from_user.eq.${userId},to_user.eq.${userId}`),
     ]);
-    return {
-      pending: pending.count ?? 0,
-      created: created.count ?? 0,
-      done: (done.count ?? 0) + (inPayment.count ?? 0) + (awaitingSig.count ?? 0),
-      returned: returned.count ?? 0,
-    };
+
+    const participatedIds = new Set<string>((stepRows ?? []).map((r: any) => r.process_id));
+    const visible = (createdRows ?? []).filter(
+      (p: any) => p.created_by === userId || p.current_user_id === userId || participatedIds.has(p.id),
+    );
+
+    let pending = 0, created = 0, done = 0, returned = 0;
+    for (const p of visible as any[]) {
+      if (p.created_by === userId) created++;
+      if (p.current_user_id === userId && p.status !== "concluido" && p.status !== "rejeitado") pending++;
+      if (p.status === "concluido" || p.status === "em_pagamento" || p.status === "aguarda_assinatura") done++;
+      if (p.status === "devolvido" && p.created_by === userId) returned++;
+    }
+    return { pending, created, done, returned };
   });
+
 
 export const searchProcesses = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
