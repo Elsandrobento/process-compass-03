@@ -5,6 +5,7 @@ import { MessageSquare, Send } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
 import { listComments, addComment } from "@/lib/processes.functions";
 
 export function ChatPanel({ processId, currentUserId }: { processId: string; currentUserId: string | null }) {
@@ -27,6 +28,10 @@ export function ChatPanel({ processId, currentUserId }: { processId: string; cur
       setContent("");
       qc.invalidateQueries({ queryKey: ["comments", processId] });
     },
+    onError: (e) => {
+      console.error(e);
+      toast.error(e.message || "Erro ao enviar mensagem. Já correstes o script SQL?");
+    }
   });
 
   const comments = q.data ?? [];
