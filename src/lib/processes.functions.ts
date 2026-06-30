@@ -155,7 +155,7 @@ export const submitDecision = createServerFn({ method: "POST" })
     let newStatus: ProcStatus = proc.status as ProcStatus;
     let newStep: StepKind = currentStep;
     let newCurrent: string | null = proc.current_user_id;
-    let action: "favoravel" | "nao_favoravel" | "devolvido" | "reenviado" | "concluido" | "rejeitado" = "favoravel";
+    let action: "favoravel" | "nao_favoravel" | "devolvido" | "reenviado" | "concluido" | "rejeitado" | "carta_assinada" = "favoravel";
     let notifyMsg = "";
 
     const isDirector = currentStep === "quarto" || currentStep === "adjunta" || currentStep === "diretor_geral";
@@ -176,7 +176,7 @@ export const submitDecision = createServerFn({ method: "POST" })
     } else if (data.action === "favoravel") {
       if (isAssinatura) {
         // Assinatura concluída → processo concluído definitivamente
-        action = "carta_assinada" as typeof action;
+        action = "carta_assinada";
         newStep = "assinatura_carta";
         newStatus = "concluido";
         newCurrent = null;
